@@ -1,0 +1,132 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = "postgresql://postgres:UPtoYJN63mVyYE5D@db.ljpvplosgcrrkwurwufg.supabase.co:5432/postgres?schema=public"
+}
+
+model Player {
+  id          Int      @id @default(autoincrement())
+  name        String
+  fullName    String?  @map("full_name")
+  nationality String?
+  position    String?
+  birthDate   DateTime? @map("birth_date")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relationships
+  playerTeams    PlayerTeam[]
+  playerManagers PlayerManager[]
+
+  @@map("players")
+}
+
+model Team {
+  id          Int      @id @default(autoincrement())
+  name        String
+  country     String?
+  league      String?
+  foundedYear Int?     @map("founded_year")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relationships
+  playerTeams  PlayerTeam[]
+  managerTeams ManagerTeam[]
+
+  @@map("teams")
+}
+
+model Manager {
+  id          Int      @id @default(autoincrement())
+  name        String
+  nationality String?
+  birthDate   DateTime? @map("birth_date")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relationships
+  managerTeams   ManagerTeam[]
+  playerManagers PlayerManager[]
+
+  @@map("managers")
+}
+
+model PlayerTeam {
+  id        Int       @id @default(autoincrement())
+  playerId  Int       @map("player_id")
+  teamId    Int       @map("team_id")
+  startDate DateTime? @map("start_date")
+  endDate   DateTime? @map("end_date")
+  loan      Boolean   @default(false)
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@map("player_teams")
+}
+
+model ManagerTeam {
+  id        Int       @id @default(autoincrement())
+  managerId Int       @map("manager_id")
+  teamId    Int       @map("team_id")
+  startDate DateTime? @map("start_date")
+  endDate   DateTime? @map("end_date")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  manager Manager @relation(fields: [managerId], references: [id], onDelete: Cascade)
+  team    Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@map("manager_teams")
+}
+
+model PlayerManager {
+  id        Int       @id @default(autoincrement())
+  playerId  Int       @map("player_id")
+  managerId Int       @map("manager_id")
+  teamId    Int?      @map("team_id") // Optional: which team they were together at
+  startDate DateTime? @map("start_date")
+  endDate   DateTime? @map("end_date")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  player  Player  @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  manager Manager @relation(fields: [managerId], references: [id], onDelete: Cascade)
+
+  @@map("player_managers")
+}
+
+// Game-related tables
+model Game {
+  id          Int      @id @default(autoincrement())
+  startPlayer String   @map("start_player")
+  endPlayer   String   @map("end_player")
+  pathLength  Int      @map("path_length")
+  timeSeconds Int      @map("time_seconds")
+  score       Int
+  userId      String?  @map("user_id") // For registered users
+  sessionId   String?  @map("session_id") // For anonymous users
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("games")
+}
+
+model DailyChallenge {
+  id          Int      @id @default(autoincrement())
+  date        DateTime @unique
+  startPlayer String   @map("start_player")
+  endPlayer   String   @map("end_player")
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("daily_challenges")
+}
