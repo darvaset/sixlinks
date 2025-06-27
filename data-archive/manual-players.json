@@ -1,0 +1,256 @@
+[
+  {
+    "name": "Xavi",
+    "fullName": "Xavier Hernández Creus",
+    "nationality": "Spain",
+    "position": "Midfielder",
+    "careerHistory": [
+      {
+        "club": "FC Barcelona",
+        "startYear": 1998,
+        "endYear": 2015,
+        "league": "La Liga"
+      },
+      {
+        "club": "Al Sadd",
+        "startYear": 2015,
+        "endYear": 2019,
+        "league": "Qatar Stars League"
+      }
+    ]
+  },
+  {
+    "name": "Andrés Iniesta",
+    "fullName": "Andrés Iniesta Luján",
+    "nationality": "Spain",
+    "position": "Midfielder",
+    "careerHistory": [
+      {
+        "club": "FC Barcelona",
+        "startYear": 2002,
+        "endYear": 2018,
+        "league": "La Liga"
+      },
+      {
+        "club": "Vissel Kobe",
+        "startYear": 2018,
+        "endYear": 2023,
+        "league": "J1 League"
+      }
+    ]
+  },
+  {
+    "name": "Gerard Piqué",
+    "fullName": "Gerard Piqué Bernabéu",
+    "nationality": "Spain",
+    "position": "Defender",
+    "careerHistory": [
+      {
+        "club": "FC Barcelona",
+        "startYear": 2004,
+        "endYear": 2005,
+        "league": "La Liga"
+      },
+      {
+        "club": "Manchester United",
+        "startYear": 2004,
+        "endYear": 2008,
+        "league": "Premier League"
+      },
+      {
+        "club": "FC Barcelona",
+        "startYear": 2008,
+        "endYear": 2022,
+        "league": "La Liga"
+      }
+    ]
+  },
+  {
+    "name": "Karim Benzema",
+    "fullName": "Karim Mostafa Benzema",
+    "nationality": "France",
+    "position": "Forward",
+    "careerHistory": [
+      {
+        "club": "Olympique Lyon",
+        "startYear": 2005,
+        "endYear": 2009,
+        "league": "Ligue 1"
+      },
+      {
+        "club": "Real Madrid",
+        "startYear": 2009,
+        "endYear": 2023,
+        "league": "La Liga"
+      },
+      {
+        "club": "Al-Ittihad",
+        "startYear": 2023,
+        "endYear": null,
+        "league": "Saudi Pro League"
+      }
+    ]
+  },
+  {
+    "name": "Toni Kroos",
+    "fullName": "Toni Kroos",
+    "nationality": "Germany",
+    "position": "Midfielder",
+    "careerHistory": [
+      {
+        "club": "Bayern Munich",
+        "startYear": 2007,
+        "endYear": 2014,
+        "league": "Bundesliga"
+      },
+      {
+        "club": "Real Madrid",
+        "startYear": 2014,
+        "endYear": 2024,
+        "league": "La Liga"
+      }
+    ]
+  },
+  {
+    "name": "Mohamed Salah",
+    "fullName": "Mohamed Salah Hamed Mahrous Ghaly",
+    "nationality": "Egypt",
+    "position": "Forward",
+    "careerHistory": [
+      {
+        "club": "El Mokawloon",
+        "startYear": 2010,
+        "endYear": 2012,
+        "league": "Egyptian Premier League"
+      },
+      {
+        "club": "FC Basel",
+        "startYear": 2012,
+        "endYear": 2014,
+        "league": "Swiss Super League"
+      },
+      {
+        "club": "Chelsea",
+        "startYear": 2014,
+        "endYear": 2016,
+        "league": "Premier League"
+      },
+      {
+        "club": "AS Roma",
+        "startYear": 2016,
+        "endYear": 2017,
+        "league": "Serie A"
+      },
+      {
+        "club": "Liverpool",
+        "startYear": 2017,
+        "endYear": null,
+        "league": "Premier League"
+      }
+    ]
+  },
+  {
+    "name": "Harry Kane",
+    "fullName": "Harry Edward Kane",
+    "nationality": "England",
+    "position": "Forward",
+    "careerHistory": [
+      {
+        "club": "Tottenham Hotspur",
+        "startYear": 2009,
+        "endYear": 2023,
+        "league": "Premier League"
+      },
+      {
+        "club": "Bayern Munich",
+        "startYear": 2023,
+        "endYear": null,
+        "league": "Bundesliga"
+      }
+    ]
+  },
+  {
+    "name": "Robert Lewandowski",
+    "fullName": "Robert Lewandowski",
+    "nationality": "Poland",
+    "position": "Forward",
+    "careerHistory": [
+      {
+        "club": "Borussia Dortmund",
+        "startYear": 2010,
+        "endYear": 2014,
+        "league": "Bundesliga"
+      },
+      {
+        "club": "Bayern Munich",
+        "startYear": 2014,
+        "endYear": 2022,
+        "league": "Bundesliga"
+      },
+      {
+        "club": "FC Barcelona",
+        "startYear": 2022,
+        "endYear": null,
+        "league": "La Liga"
+      }
+    ]
+  },
+  {
+    "name": "Paul Pogba",
+    "fullName": "Paul Labile Pogba",
+    "nationality": "France",
+    "position": "Midfielder",
+    "careerHistory": [
+      {
+        "club": "Manchester United",
+        "startYear": 2009,
+        "endYear": 2012,
+        "league": "Premier League"
+      },
+      {
+        "club": "Juventus",
+        "startYear": 2012,
+        "endYear": 2016,
+        "league": "Serie A"
+      },
+      {
+        "club": "Manchester United",
+        "startYear": 2016,
+        "endYear": 2022,
+        "league": "Premier League"
+      },
+      {
+        "club": "Juventus",
+        "startYear": 2022,
+        "endYear": null,
+        "league": "Serie A"
+      }
+    ]
+  },
+  {
+    "name": "Eden Hazard",
+    "fullName": "Eden Michael Hazard",
+    "nationality": "Belgium",
+    "position": "Forward",
+    "careerHistory": [
+      {
+        "club": "Lille",
+        "startYear": 2007,
+        "endYear": 2012,
+        "league": "Ligue 1"
+      },
+      {
+        "club": "Chelsea",
+        "startYear": 2012,
+        "endYear": 2019,
+        "league": "Premier League"
+      },
+      {
+        "club": "Real Madrid",
+        "startYear": 2019,
+        "endYear": 2023,
+        "league": "La Liga"
+      }
+    ]
+  }
+]
