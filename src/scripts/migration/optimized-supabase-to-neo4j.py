@@ -145,7 +145,7 @@ class OptimizedFootballETL:
         with self.neo4j_driver.session() as session:
             indexes = [
                 "CREATE INDEX player_id IF NOT EXISTS FOR (p:Player) ON (p.id)",
-                "CREATE INDEX player_name IF NOT EXISTS FOR (p:Player) ON (p.name)",
+                "CREATE CONSTRAINT player_name_unique IF NOT EXISTS FOR (p:Player) REQUIRE p.name IS UNIQUE",
                 "CREATE INDEX player_nationality IF NOT EXISTS FOR (p:Player) ON (p.nationality)",
                 "CREATE INDEX team_id IF NOT EXISTS FOR (t:Team) ON (t.id)",
                 "CREATE INDEX team_name IF NOT EXISTS FOR (t:Team) ON (t.name)",

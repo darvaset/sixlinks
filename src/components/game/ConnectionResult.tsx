@@ -1,71 +1,107 @@
 'use client'
 
-// --- FIX: Import 'motion' from the framer-motion library ---
-import { motion } from 'framer-motion' 
-import { GameResult, Player } from '@/types/game'
-import { Scoreboard } from './Scoreboard'
-import { ConnectionLink } from './ConnectionLink'
-import { PlayerCard } from './PlayerCard'
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { GameResult } from '@/types/game';
+import { Scoreboard } from './Scoreboard';
+import { CarouselStep } from './CarouselStep';
 
 interface ConnectionResultProps {
-  result: GameResult
-  onPlayAgain: () => void
+  result: GameResult;
+  onPlayAgain: () => void;
 }
 
 export function ConnectionResult({ result, onPlayAgain }: ConnectionResultProps) {
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
-  };
+  const [currentIndex, setCurrentIndex] = useState(0);
 
-  const itemVariants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: { y: 0, opacity: 1 }
+  // FIX: For direct connections, we need to handle the display differently
+  const isDirectConnection = result.path.length === 1;
+  
+  // For direct connections, we only have one slide
+  // For multi-step connections, we show each step
+  const slides = result.path.map((step, index) => ({
+    player1: step.from,
+    player2: step.to,
+    connection: step.connection
+  }));
+
+  const totalSteps = slides.length;
+
+  const navigate = (direction: number) => {
+    const newIndex = currentIndex + direction;
+    if (newIndex >= 0 && newIndex < totalSteps) {
+      setCurrentIndex(newIndex);
+    }
   };
 
   return (
-    <motion.div 
-      className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 space-y-6"
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-    >
-      <motion.div variants={itemVariants} className="text-center">
+    <div className="bg-white rounded-2xl shadow-xl p-4 sm:p-6 space-y-4 w-full">
+      <div className="text-center">
         <h2 className="text-2xl font-bold text-gray-900 mb-1">Connection Found!</h2>
         <p className="text-gray-600">
-          Connected {result.startPlayer.name} to {result.endPlayer.name} in {result.totalSteps} steps
+          Connected {result.startPlayer.name} to {result.endPlayer.name} in {totalSteps} {totalSteps === 1 ? 'step' : 'steps'}
         </p>
-      </motion.div>
-
-      <motion.div variants={itemVariants}>
-        <Scoreboard 
-          steps={result.totalSteps} 
-          time={result.searchTime} 
-          points={result.score} 
-        />
-      </motion.div>
-
-      <div className="space-y-2">
-        <motion.div variants={itemVariants}>
-          <PlayerCard player={result.startPlayer} role="START" />
-        </motion.div>
-
-        {result.path.map((step, index) => {
-          // Find the corresponding "to" player from the full player objects
-          const toPlayer = index === result.path.length - 1 ? result.endPlayer : (step.to as Player);
-          return (
-            <motion.div key={index} variants={itemVariants} className="space-y-2">
-              <ConnectionLink 
-                title={step.connection.team || 'Unknown Connection'} 
-                subtitle={step.connection.description} 
-              />
-              <PlayerCard player={toPlayer} role={index < result.path.length - 1 ? `STEP ${index + 1}` : 'END'} />
-            </motion.div>
-          )
-        })}
       </div>
 
-      <motion.div variants={itemVariants} className="pt-6 border-t border-gray-200 space-y-4">
+      <Scoreboard steps={totalSteps} time={result.searchTime} points={result.score} />
+      
+      {/* Carousel Container */}
+      <div className="relative h-96 overflow-hidden">
+        <AnimatePresence initial={false}>
+          <motion.div
+            key={currentIndex}
+            className="absolute w-full h-full"
+            initial={{ x: 300, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: -300, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            onDragEnd={(e, { offset, velocity }) => {
+              const swipe = Math.abs(offset.x) * velocity.x;
+              if (swipe < -10000 && currentIndex < totalSteps - 1) {
+                navigate(1); // Next
+              } else if (swipe > 10000 && currentIndex > 0) {
+                navigate(-1); // Previous
+              }
+            }}
+          >
+            <CarouselStep
+              stepNumber={currentIndex + 1}
+              totalSteps={totalSteps}
+              player1={slides[currentIndex].player1}
+              player2={slides[currentIndex].player2}
+              connection={slides[currentIndex].connection}
+            />
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      {/* Navigation Controls - Only show if more than 1 step */}
+      {totalSteps > 1 && (
+        <div className="flex justify-between items-center">
+          <button 
+            onClick={() => navigate(-1)} 
+            disabled={currentIndex === 0}
+            className="px-4 py-2 bg-gray-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-800 transition-colors font-medium"
+          >
+            ← Previous
+          </button>
+          <div className="text-sm font-semibold text-gray-700">
+            {currentIndex + 1} / {totalSteps}
+          </div>
+          <button 
+            onClick={() => navigate(1)} 
+            disabled={currentIndex === totalSteps - 1}
+            className="px-4 py-2 bg-gray-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-800 transition-colors font-medium"
+          >
+            Next →
+          </button>
+        </div>
+      )}
+
+      {/* Action Buttons */}
+      <div className="pt-4 border-t border-gray-200 space-y-4">
         <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors">
           Share Result
         </button>
@@ -75,7 +111,7 @@ export function ConnectionResult({ result, onPlayAgain }: ConnectionResultProps)
         >
           Play Again
         </button>
-      </motion.div>
-    </motion.div>
-  )
+      </div>
+    </div>
+  );
 }

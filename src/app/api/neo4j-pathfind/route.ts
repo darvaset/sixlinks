@@ -1,186 +1,352 @@
-// src/app/api/neo4j-pathfind/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import neo4j from 'neo4j-driver';
+import { getNeo4jDriver } from '@/lib/neo4j'; 
+import { GameResult, PathStep, Player } from '@/types/game';
 
+interface ConnectionInfo {
+  type: 'teammate' | 'national_team' | 'manager';
+  teamName: string;
+  startDate?: string;
+  endDate?: string;
+  isCurrent: boolean;
+}
 
-// Initialize Neo4j driver
-const driver = neo4j.driver(
-  process.env.NEO4J_URI!,
-  neo4j.auth.basic(process.env.NEO4J_USERNAME!, process.env.NEO4J_PASSWORD!)
-);
-
-export async function POST(request: NextRequest) {
-  const session = driver.session();
+function formatDateRange(startDate?: string, endDate?: string): string {
+  if (!startDate) return '';
   
+  const start = new Date(startDate).getFullYear();
+  const currentYear = new Date().getFullYear();
+  
+  if (!endDate || new Date(endDate) > new Date()) {
+    // Current connection
+    return start === currentYear ? 'since earlier this year' : `since ${start}`;
+  } else {
+    // Past connection
+    const end = new Date(endDate).getFullYear();
+    if (start === end) {
+      return `in ${start}`;
+    } else {
+      return `from ${start} to ${end}`;
+    }
+  }
+}
+
+function createConnectionDescription(
+  player1Name: string, 
+  player2Name: string, 
+  connection: ConnectionInfo
+): string {
+  const dateRange = formatDateRange(connection.startDate, connection.endDate);
+  
+  if (connection.type === 'national_team') {
+    const verb = connection.isCurrent ? 'represent' : 'represented';
+    return `${player1Name} and ${player2Name} both ${verb} ${connection.teamName}${dateRange ? ' ' + dateRange : ''}`;
+  } else {
+    const verb = connection.isCurrent ? 'are teammates' : 'were teammates';
+    return `${player1Name} and ${player2Name} ${verb} at ${connection.teamName}${dateRange ? ' ' + dateRange : ''}`;
+  }
+}
+
+async function findConnectionPath(startPlayerId: number, endPlayerId: number) {
+  const driver = getNeo4jDriver();
+  const session = driver.session();
+  const startTime = Date.now();
+
   try {
-    const { player1Name, player2Name } = await request.json();
+    // Fetch full details for the start and end players
+    const playerDetailsQuery = `
+      MATCH (p:Player) WHERE p.id IN [$startPlayerId, $endPlayerId]
+      RETURN p as playerNode
+    `;
+    const playerDetailsResult = await session.run(playerDetailsQuery, { startPlayerId, endPlayerId });
     
-    if (!player1Name || !player2Name) {
-      return NextResponse.json(
-        { error: 'Both player names are required' },
-        { status: 400 }
-      );
+    let startPlayer: Player | undefined, endPlayer: Player | undefined;
+    playerDetailsResult.records.forEach(record => {
+      const playerNode = record.get('playerNode').properties;
+      if (playerNode && playerNode.id) {
+        const player: Player = {
+          id: playerNode.id,
+          name: playerNode.name,
+          fullName: playerNode.full_name,
+          nationality: playerNode.nationality,
+          position: playerNode.position
+        };
+        if (player.id === startPlayerId) startPlayer = player;
+        else endPlayer = player;
+      }
+    });
+
+    if (!startPlayer || !endPlayer) {
+      return NextResponse.json({ error: 'One or both players could not be found.' }, { status: 404 });
     }
 
-    const startTime = Date.now();
-
-    // Find the shortest path between two players
-    const result = await session.run(
-      `
-      MATCH (p1:Player {name: $player1Name})
-      MATCH (p2:Player {name: $player2Name})
-      MATCH path = shortestPath((p1)-[*..6]-(p2))
+    // Check for 1-step connections with detailed date information
+    const oneStepQuery = `
+      MATCH (p1:Player {id: $startPlayerId})-[r1]->(middle)<-[r2]-(p2:Player {id: $endPlayerId})
+      WHERE (middle:Team OR middle:NationalTeam)
+      WITH middle, r1, r2, labels(middle) as middleLabels
       RETURN 
-        path,
-        length(path) as pathLength,
-        [node in nodes(path) | {
-          name: node.name,
-          type: labels(node)[0],
-          nationality: node.nationality,
-          position: node.position
-        }] as nodes,
-        [rel in relationships(path) | {
-          type: type(rel),
-          startDate: rel.startDate,
-          endDate: rel.endDate,
-          current: rel.current
-        }] as relationships
-      `,
-      { player1Name, player2Name }
-    );
+        middle.name as middleName,
+        middleLabels[0] as middleType,
+        r1.start_date as p1StartDate,
+        r1.end_date as p1EndDate,
+        r2.start_date as p2StartDate,
+        r2.end_date as p2EndDate,
+        // Calculate overlapping period
+        CASE 
+          WHEN r1.start_date > r2.start_date THEN r1.start_date 
+          ELSE r2.start_date 
+        END as overlapStart,
+        CASE 
+          WHEN r1.end_date IS NULL AND r2.end_date IS NULL THEN null
+          WHEN r1.end_date IS NULL THEN r2.end_date
+          WHEN r2.end_date IS NULL THEN r1.end_date
+          WHEN r1.end_date < r2.end_date THEN r1.end_date 
+          ELSE r2.end_date 
+        END as overlapEnd
+      LIMIT 1
+    `;
+    const oneStepResult = await session.run(oneStepQuery, { startPlayerId, endPlayerId });
 
+    if (oneStepResult.records.length > 0) {
+      const record = oneStepResult.records[0];
+      const middleName = record.get('middleName');
+      const middleType = record.get('middleType');
+      const overlapStart = record.get('overlapStart');
+      const overlapEnd = record.get('overlapEnd');
+      
+      const isNationalTeam = middleType === 'NationalTeam';
+      const currentDate = new Date();
+      const isCurrent = !overlapEnd || new Date(overlapEnd) > currentDate;
+      
+      const connection: ConnectionInfo = {
+        type: isNationalTeam ? 'national_team' : 'teammate',
+        teamName: middleName,
+        startDate: overlapStart,
+        endDate: overlapEnd,
+        isCurrent
+      };
+      
+      const description = createConnectionDescription(startPlayer.name, endPlayer.name, connection);
+      
+      const searchTime = Date.now() - startTime;
+      const gameResult: GameResult = {
+        found: true,
+        path: [{
+          from: {
+            id: startPlayer.id,
+            name: startPlayer.name,
+            type: 'player',
+            nationality: startPlayer.nationality,
+            position: startPlayer.position
+          },
+          to: {
+            id: endPlayer.id,
+            name: endPlayer.name,
+            type: 'player',
+            nationality: endPlayer.nationality,
+            position: endPlayer.position
+          },
+          connection: { 
+            type: connection.type,
+            description: description,
+            team: middleName,
+            period: connection.isCurrent ? 'current' : formatDateRange(overlapStart, overlapEnd)
+          }
+        }],
+        totalSteps: 1,
+        searchTime,
+        score: calculateScore(1, searchTime),
+        startPlayer,
+        endPlayer
+      };
+      await session.close();
+      return NextResponse.json(gameResult);
+    }
+    
+    // For longer paths, we need a more sophisticated query
+    const pathQuery = `
+      MATCH (p1:Player {id: $startPlayerId}), (p2:Player {id: $endPlayerId})
+      MATCH path = shortestPath((p1)-[*..12]-(p2))
+      WITH path
+      // Extract all nodes and relationships with their properties
+      UNWIND nodes(path) as node
+      WITH path, collect(DISTINCT {
+        id: node.id,
+        name: node.name,
+        labels: labels(node),
+        nationality: CASE WHEN 'Player' IN labels(node) THEN node.nationality ELSE null END,
+        position: CASE WHEN 'Player' IN labels(node) THEN node.position ELSE null END
+      }) as nodeDetails,
+      [r in relationships(path) | {
+        type: type(r),
+        startDate: r.start_date,
+        endDate: r.end_date
+      }] as relDetails
+      RETURN nodeDetails, relDetails
+      ORDER BY length(path)
+      LIMIT 1
+    `;
+    const pathResult = await session.run(pathQuery, { startPlayerId, endPlayerId });
     const searchTime = Date.now() - startTime;
 
-    if (result.records.length === 0) {
-      // Try to find the players to give better error messages
-      const player1Exists = await session.run(
-        'MATCH (p:Player {name: $name}) RETURN p',
-        { name: player1Name }
-      );
-      
-      const player2Exists = await session.run(
-        'MATCH (p:Player {name: $name}) RETURN p',
-        { name: player2Name }
-      );
-
-      if (player1Exists.records.length === 0) {
-        return NextResponse.json(
-          { error: `Player "${player1Name}" not found` },
-          { status: 404 }
-        );
-      }
-      
-      if (player2Exists.records.length === 0) {
-        return NextResponse.json(
-          { error: `Player "${player2Name}" not found` },
-          { status: 404 }
-        );
-      }
-
+    if (pathResult.records.length === 0) {
       return NextResponse.json({
-        found: false,
-        message: 'No path found between these players within 6 degrees',
-        searchTime
+        found: false, 
+        path: [], 
+        totalSteps: 0, 
+        searchTime, 
+        score: 0, 
+        startPlayer, 
+        endPlayer,
+        message: 'No connection found between these players within 6 degrees.'
       });
     }
 
-    const record = result.records[0];
-    const nodes = record.get('nodes');
-    const relationships = record.get('relationships');
-    const pathLength = record.get('pathLength').toNumber();
-
-    // Format the path for the frontend
-    const formattedPath = [];
-    for (let i = 0; i < nodes.length - 1; i++) {
-      const fromNode = nodes[i];
-      const toNode = nodes[i + 1];
-      const relationship = relationships[i];
-
-      // Determine connection description
-      let description = '';
-      if (relationship.type === 'PLAYED_FOR') {
-        description = `Teammates at ${toNode.type === 'Team' ? toNode.name : fromNode.name}`;
-      } else if (relationship.type === 'REPRESENTS') {
-        const nationalTeam = fromNode.type === 'NationalTeam' ? fromNode : toNode;
-        description = nationalTeam.name;
-      } else if (relationship.type === 'MANAGED_BY' || relationship.type === 'MANAGED') {
-        description = `Manager connection`;
+    const record = pathResult.records[0];
+    const nodeDetails = record.get('nodeDetails') ?? [];
+    const relDetails = record.get('relDetails') ?? [];
+    
+    console.log('Path nodes:', JSON.stringify(nodeDetails, null, 2));
+    console.log('Relationships:', JSON.stringify(relDetails, null, 2));
+    
+    // Process the path to create meaningful connections
+    const formattedPath: PathStep[] = [];
+    
+    // Find all players in the path
+    const playerIndices: number[] = [];
+    nodeDetails.forEach((node, index) => {
+      if (node.labels.includes('Player')) {
+        playerIndices.push(index);
       }
-
+    });
+    
+    console.log('Player indices:', playerIndices);
+    
+    // Create connections between consecutive players
+    for (let i = 0; i < playerIndices.length - 1; i++) {
+      const currentPlayerIndex = playerIndices[i];
+      const nextPlayerIndex = playerIndices[i + 1];
+      const currentPlayer = nodeDetails[currentPlayerIndex];
+      const nextPlayer = nodeDetails[nextPlayerIndex];
+      
+      // Analyze what's between these two players
+      const nodesBetween = nodeDetails.slice(currentPlayerIndex + 1, nextPlayerIndex);
+      console.log(`Between ${currentPlayer.name} and ${nextPlayer.name}:`, nodesBetween);
+      
+      let description = '';
+      let connectionType: 'teammate' | 'national_team' | 'manager' = 'teammate';
+      let teamName = '';
+      
+      if (nodesBetween.length === 1) {
+        // Direct connection through team/national team
+        const middleNode = nodesBetween[0];
+        const isNationalTeam = middleNode.labels.includes('NationalTeam');
+        
+        connectionType = isNationalTeam ? 'national_team' : 'teammate';
+        teamName = middleNode.name;
+        
+        // Get the relationship details
+        const rel1 = relDetails[currentPlayerIndex];
+        const rel2 = relDetails[currentPlayerIndex + 1];
+        
+        // For now, use simplified description (we'd need more complex logic for dates in multi-step paths)
+        if (isNationalTeam) {
+          description = `${currentPlayer.name} and ${nextPlayer.name} both represented ${middleNode.name}`;
+        } else {
+          description = `${currentPlayer.name} and ${nextPlayer.name} were teammates at ${middleNode.name}`;
+        }
+      } else {
+        // More complex connection
+        const connectionPath = nodesBetween.map(n => n.name).join(' → ');
+        description = `${currentPlayer.name} connected to ${nextPlayer.name} via ${connectionPath}`;
+      }
+      
       formattedPath.push({
         from: {
-          name: fromNode.name,
-          type: fromNode.type.toLowerCase(),
-          nationality: fromNode.nationality,
-          position: fromNode.position
+          id: currentPlayer.id,
+          name: currentPlayer.name,
+          type: 'player',
+          nationality: currentPlayer.nationality,
+          position: currentPlayer.position
         },
         to: {
-          name: toNode.name,
-          type: toNode.type.toLowerCase(),
-          nationality: toNode.nationality,
-          position: toNode.position
+          id: nextPlayer.id,
+          name: nextPlayer.name,
+          type: 'player',
+          nationality: nextPlayer.nationality,
+          position: nextPlayer.position
         },
         connection: {
-          type: relationship.type.toLowerCase().replace('_', '-'),
-          description: description
+          type: connectionType,
+          description: description,
+          team: teamName
         }
       });
     }
 
-    return NextResponse.json({
+    const gameResult: GameResult = {
       found: true,
       path: formattedPath,
-      totalSteps: pathLength / 2, // Neo4j counts relationships, we want connections
+      totalSteps: formattedPath.length,
       searchTime,
-      performanceNote: `Neo4j query completed in ${searchTime}ms`
-    });
+      score: calculateScore(formattedPath.length, searchTime),
+      startPlayer,
+      endPlayer
+    };
+    
+    console.log('Final formatted path:', JSON.stringify(formattedPath, null, 2));
+    console.log('Total steps:', formattedPath.length);
+    
+    return NextResponse.json(gameResult);
 
   } catch (error) {
-    console.error('Neo4j query error:', error);
+    console.error('API pathfinding error:', error);
     return NextResponse.json(
-      { error: 'Failed to find path', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'An internal server error occurred during pathfinding.' },
       { status: 500 }
     );
   } finally {
-    await session.close();
+    if (session) {
+      await session.close();
+    }
   }
 }
 
-// Optional: GET endpoint to search for players
-export async function GET(request: NextRequest) {
-  const session = driver.session();
+function calculateScore(steps: number, timeMs: number): number {
+  // Base score starts at 1000
+  let score = 1000;
   
-  try {
-    const searchParams = request.nextUrl.searchParams;
-    const query = searchParams.get('q');
-    
-    if (!query || query.length < 2) {
-      return NextResponse.json({ players: [] });
-    }
-
-    const result = await session.run(
-      `
-      MATCH (p:Player)
-      WHERE p.name CONTAINS $query
-      RETURN p.name as name, p.nationality as nationality, p.position as position
-      ORDER BY p.name
-      LIMIT 10
-      `,
-      { query }
-    );
-
-    const players = result.records.map(record => ({
-      name: record.get('name'),
-      nationality: record.get('nationality'),
-      position: record.get('position')
-    }));
-
-    return NextResponse.json({ players });
-
-  } catch (error) {
-    console.error('Neo4j search error:', error);
-    return NextResponse.json({ players: [] });
-  } finally {
-    await session.close();
+  // Deduct points for each step (fewer steps = higher score)
+  score -= (steps - 1) * 100;
+  
+  // Bonus for fast completion (under 5 seconds)
+  if (timeMs < 5000) {
+    score += 50;
   }
+  
+  // Ensure score doesn't go below 100
+  return Math.max(score, 100);
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { startPlayerId, endPlayerId } = body;
+    if (startPlayerId == null || endPlayerId == null) {
+      return NextResponse.json({ error: 'Player IDs are required.' }, { status: 400 });
+    }
+    return findConnectionPath(Number(startPlayerId), Number(endPlayerId));
+  } catch(e) {
+    return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 });
+  }
+}
+
+export async function GET(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams;
+  const startId = searchParams.get('start');
+  const endId = searchParams.get('end');
+  if (!startId || !endId) {
+    return NextResponse.json({ error: 'The "start" and "end" query parameters are required.' }, { status: 400 });
+  }
+  return findConnectionPath(Number(startId), Number(endId));
 }

@@ -1,5 +1,3 @@
-// This file is the single source of truth for your game's data structures.
-
 export interface Player {
   id: number;
   name: string;
@@ -32,7 +30,7 @@ export interface PathStep {
     type: 'teammate' | 'manager' | 'national_team';
     description: string;
     team?: string;
-    period?: string;
+    period?: string; // Can be "current", date range like "2017-2019", or descriptive like "from 2015 to 2018"
   };
 }
 
@@ -44,6 +42,4 @@ export interface GameResult {
   score: number;
   startPlayer: Player;
   endPlayer: Player;
-  error?: string;
-  message?: string;
 }
