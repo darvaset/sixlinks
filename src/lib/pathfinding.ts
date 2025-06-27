@@ -1,3 +1,4 @@
+// src/lib/pathfinding.ts
 import { prisma } from './prisma'
 
 export interface ConnectionNode {
@@ -136,7 +137,42 @@ export class SixDegreesPathfinder {
         position: player.position || undefined
       }
 
-      // Find teammates (players who played at the same team)
+      // 1. NATIONAL TEAM CONNECTIONS FIRST (fastest)
+      if (player.nationality) {
+        const nationalTeammates = await prisma.player.findMany({
+          where: {
+            nationality: player.nationality,
+            id: { not: player.id }
+          },
+          select: {
+            id: true,
+            name: true,
+            nationality: true,
+            position: true
+          },
+          take: 200 // Increase limit for national teams
+        })
+
+        for (const teammate of nationalTeammates) {
+          connections.push({
+            from: fromNode,
+            to: {
+              id: teammate.id,
+              name: teammate.name,
+              type: 'player',
+              nationality: teammate.nationality || undefined,
+              position: teammate.position || undefined
+            },
+            connection: {
+              type: 'national_team',
+              description: `${player.nationality} National Team`,
+              team: `${player.nationality} National Team`
+            }
+          })
+        }
+      }
+
+      // 2. CLUB TEAMMATES
       for (const playerTeam of player.playerTeams) {
         const teammates = await prisma.playerTeam.findMany({
           where: {
@@ -166,7 +202,8 @@ export class SixDegreesPathfinder {
           },
           include: {
             player: true
-          }
+          },
+          take: 50 // Limit for performance
         })
 
         for (const teammate of teammates) {
@@ -191,7 +228,7 @@ export class SixDegreesPathfinder {
         }
       }
 
-      // Find managers who coached this player
+      // 3. MANAGERS
       for (const playerManager of player.playerManagers) {
         connections.push({
           from: fromNode,
