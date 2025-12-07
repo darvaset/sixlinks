@@ -106,106 +106,133 @@ async function findConnectionPath(startPersonId: number, endPersonId: number) {
       // 1. Teammates at Club (PLAYED_FOR)
       OPTIONAL MATCH (p1)-[s1:PLAYED_FOR]->(c:Club)<-[s2:PLAYED_FOR]-(p2)
       WHERE s1.startDate <= s2.endDate AND s2.startDate <= s1.endDate
+        AND (p1.primaryPosition IS NOT NULL AND p1.primaryPosition <> 'Manager')
+        AND (p2.primaryPosition IS NOT NULL AND p2.primaryPosition <> 'Manager')
+      WITH p1, p2, $startPersonId AS startPersonId, $endPersonId AS endPersonId, s1, s2, c
       WITH p1, p2, startPersonId, endPersonId,
-        collect({
-          type: 'club_teammates',
-          venueName: c.name,
-          venueType: 'Club',
-          startDate: toString(CASE WHEN s1.startDate > s2.startDate THEN s1.startDate ELSE s2.startDate END),
-          endDate: toString(CASE WHEN s1.endDate < s2.endDate THEN s1.endDate ELSE s2.endDate END)
-        }) AS clubTeammateConnections
+           collect(CASE WHEN c IS NOT NULL THEN {
+              type: 'club_teammates',
+              venueName: c.name,
+              venueType: 'Club',
+              startDate: toString(CASE WHEN s1.startDate > s2.startDate THEN s1.startDate ELSE s2.startDate END),
+              endDate: toString(CASE WHEN s1.endDate < s2.endDate THEN s1.endDate ELSE s2.endDate END)
+            } ELSE null END) AS rawClubTeammateConnections
+      WITH p1, p2, startPersonId, endPersonId,
+           [conn IN rawClubTeammateConnections WHERE conn IS NOT NULL] AS clubTeammateConnections
 
       // 2. Teammates at National Team (REPRESENTED)
       OPTIONAL MATCH (p1)-[r1:REPRESENTED]->(nt:NationalTeam)<-[r2:REPRESENTED]-(p2)
       WHERE r1.firstCap <= r2.lastCap AND r2.firstCap <= r1.lastCap
+      WITH p1, p2, $startPersonId AS startPersonId, $endPersonId AS endPersonId, clubTeammateConnections, r1, r2, nt
       WITH p1, p2, startPersonId, endPersonId, clubTeammateConnections,
-        collect({
-          type: 'national_teammates',
-          venueName: nt.name,
-          venueType: 'NationalTeam',
-          startDate: toString(CASE WHEN r1.firstCap > r2.firstCap THEN r1.firstCap ELSE r2.firstCap END),
-          endDate: toString(CASE WHEN r1.lastCap < r2.lastCap THEN r1.lastCap ELSE r2.lastCap END)
-        }) AS nationalTeammateConnections
+           collect(CASE WHEN nt IS NOT NULL THEN {
+              type: 'national_teammates',
+              venueName: nt.name,
+              venueType: 'NationalTeam',
+              startDate: toString(CASE WHEN r1.firstCap > r2.firstCap THEN r1.firstCap ELSE r2.firstCap END),
+              endDate: toString(CASE WHEN r1.lastCap < r2.lastCap THEN r1.lastCap ELSE r2.lastCap END)
+            } ELSE null END) AS rawnationalTeammateConnections
+      WITH p1, p2, startPersonId, endPersonId, clubTeammateConnections,
+           [conn IN rawnationalTeammateConnections WHERE conn IS NOT NULL] AS nationalTeammateConnections
       
       // 3. Player under Manager at Club (PLAYED_FOR and MANAGED)
       OPTIONAL MATCH (p1)-[pl:PLAYED_FOR]->(c_pm:Club)<-[mg:MANAGED]-(p2)
       WHERE pl.startDate <= mg.endDate AND mg.startDate <= pl.endDate
+        AND (p1.primaryPosition IS NOT NULL AND p1.primaryPosition <> 'Manager') AND p2.primaryPosition = 'Manager'
+      WITH p1, p2, $startPersonId AS startPersonId, $endPersonId AS endPersonId, clubTeammateConnections, nationalTeammateConnections, pl, mg, c_pm
       WITH p1, p2, startPersonId, endPersonId, clubTeammateConnections, nationalTeammateConnections,
-        collect({
-          type: 'player_manager_club',
-          venueName: c_pm.name,
-          venueType: 'Club',
-          startDate: toString(CASE WHEN pl.startDate > mg.startDate THEN pl.startDate ELSE mg.startDate END),
-          endDate: toString(CASE WHEN pl.endDate < mg.endDate THEN pl.endDate ELSE mg.endDate END),
-          person1Role: 'player', // p1 is player
-          person2Role: 'manager' // p2 is manager
-        }) AS playerManagerClubConnections
+           collect(CASE WHEN c_pm IS NOT NULL THEN {
+              type: 'player_manager_club',
+              venueName: c_pm.name,
+              venueType: 'Club',
+              startDate: toString(CASE WHEN pl.startDate > mg.startDate THEN pl.startDate ELSE mg.startDate END),
+              endDate: toString(CASE WHEN pl.endDate < mg.endDate THEN pl.endDate ELSE mg.endDate END),
+              person1Role: 'player', // p1 is player
+              person2Role: 'manager' // p2 is manager
+            } ELSE null END) AS rawPlayerManagerClubConnections
+      WITH p1, p2, startPersonId, endPersonId, clubTeammateConnections, nationalTeammateConnections,
+           [conn IN rawPlayerManagerClubConnections WHERE conn IS NOT NULL] AS playerManagerClubConnections
       
-      // 4. Player under Manager at National Team (REPRESENTED and MANAGED_NT)
       OPTIONAL MATCH (p1)-[rep:REPRESENTED]->(nt_pm:NationalTeam)<-[mnt:MANAGED_NT]-(p2)
       WHERE rep.firstCap <= mnt.endDate AND mnt.startDate <= rep.lastCap
+      WITH p1, p2, $startPersonId AS startPersonId, $endPersonId AS endPersonId, clubTeammateConnections, nationalTeammateConnections, playerManagerClubConnections, rep, mnt, nt_pm
       WITH p1, p2, startPersonId, endPersonId, clubTeammateConnections, nationalTeammateConnections, playerManagerClubConnections,
-        collect({
-          type: 'player_manager_national',
-          venueName: nt_pm.name,
-          venueType: 'NationalTeam',
-          startDate: toString(CASE WHEN rep.firstCap > mnt.startDate THEN rep.firstCap ELSE mnt.startDate END),
-          endDate: toString(CASE WHEN rep.lastCap < mnt.endDate THEN rep.lastCap ELSE mnt.endDate END),
-          person1Role: 'player', // p1 is player
-          person2Role: 'manager' // p2 is manager
-        }) AS playerManagerNationalConnections
+           collect(CASE WHEN nt_pm IS NOT NULL THEN {
+              type: 'player_manager_national',
+              venueName: nt_pm.name,
+              venueType: 'NationalTeam',
+              startDate: toString(CASE WHEN rep.firstCap > mnt.startDate THEN rep.firstCap ELSE mnt.startDate END),
+              endDate: toString(CASE WHEN rep.lastCap < mnt.endDate THEN rep.lastCap ELSE mnt.endDate END),
+              person1Role: 'player', // p1 is player
+              person2Role: 'manager' // p2 is manager
+            } ELSE null END) AS rawPlayerManagerNationalConnections
+      WITH p1, p2, startPersonId, endPersonId, clubTeammateConnections, nationalTeammateConnections, playerManagerClubConnections,
+           [conn IN rawPlayerManagerNationalConnections WHERE conn IS NOT NULL] AS playerManagerNationalConnections
 
       // (Reversed) Manager under Player at Club (MANAGED and PLAYED_FOR) - p1 is manager, p2 is player
       OPTIONAL MATCH (p1)-[mg_rev:MANAGED]->(c_mp:Club)<-[pl_rev:PLAYED_FOR]-(p2)
       WHERE mg_rev.startDate <= pl_rev.endDate AND pl_rev.startDate <= mg_rev.endDate
+        AND p1.primaryPosition = 'Manager' AND (p2.primaryPosition IS NOT NULL AND p2.primaryPosition <> 'Manager')
+      WITH p1, p2, $startPersonId AS startPersonId, $endPersonId AS endPersonId, clubTeammateConnections, nationalTeammateConnections, playerManagerClubConnections, playerManagerNationalConnections, mg_rev, pl_rev, c_mp
       WITH p1, p2, startPersonId, endPersonId, clubTeammateConnections, nationalTeammateConnections, playerManagerClubConnections, playerManagerNationalConnections,
-        collect({
-          type: 'player_manager_club',
-          venueName: c_mp.name,
-          venueType: 'Club',
-          startDate: toString(CASE WHEN mg_rev.startDate > pl_rev.startDate THEN mg_rev.startDate ELSE pl_rev.startDate END),
-          endDate: toString(CASE WHEN mg_rev.endDate < pl_rev.endDate THEN mg_rev.endDate ELSE pl_rev.endDate END),
-          person1Role: 'manager', // p1 is manager
-          person2Role: 'player' // p2 is player
-        }) AS managerPlayerClubConnections
+           collect(CASE WHEN c_mp IS NOT NULL THEN {
+              type: 'player_manager_club',
+              venueName: c_mp.name,
+              venueType: 'Club',
+              startDate: toString(CASE WHEN mg_rev.startDate > pl_rev.startDate THEN mg_rev.startDate ELSE pl_rev.startDate END),
+              endDate: toString(CASE WHEN mg_rev.endDate < pl_rev.endDate THEN mg_rev.endDate ELSE pl_rev.endDate END),
+              person1Role: 'manager', // p1 is manager
+              person2Role: 'player' // p2 is player
+            } ELSE null END) AS rawManagerPlayerClubConnections
+      WITH p1, p2, startPersonId, endPersonId, clubTeammateConnections, nationalTeammateConnections, playerManagerClubConnections, playerManagerNationalConnections,
+           [conn IN rawManagerPlayerClubConnections WHERE conn IS NOT NULL] AS managerPlayerClubConnections
 
       // (Reversed) Manager under Player at National Team (MANAGED_NT and REPRESENTED) - p1 is manager, p2 is player
       OPTIONAL MATCH (p1)-[mnt_rev:MANAGED_NT]->(nt_mp:NationalTeam)<-[rep_rev:REPRESENTED]-(p2)
       WHERE mnt_rev.startDate <= rep_rev.lastCap AND rep_rev.firstCap <= mnt_rev.endDate
+      WITH p1, p2, $startPersonId AS startPersonId, $endPersonId AS endPersonId, clubTeammateConnections, nationalTeammateConnections, playerManagerClubConnections, playerManagerNationalConnections, managerPlayerClubConnections, mnt_rev, rep_rev, nt_mp
       WITH p1, p2, startPersonId, endPersonId, clubTeammateConnections, nationalTeammateConnections, playerManagerClubConnections, playerManagerNationalConnections, managerPlayerClubConnections,
-        collect({
-          type: 'player_manager_national',
-          venueName: nt_mp.name,
-          venueType: 'NationalTeam',
-          startDate: toString(CASE WHEN mnt_rev.startDate > rep_rev.firstCap THEN mnt_rev.startDate ELSE rep_rev.firstCap END),
-          endDate: toString(CASE WHEN mnt_rev.endDate < rep_rev.lastCap THEN mnt_rev.endDate ELSE rep_rev.lastCap END),
-          person1Role: 'manager', // p1 is manager
-          person2Role: 'player' // p2 is player
-        }) AS managerPlayerNationalConnections
+           collect(CASE WHEN nt_mp IS NOT NULL THEN {
+              type: 'player_manager_national',
+              venueName: nt_mp.name,
+              venueType: 'NationalTeam',
+              startDate: toString(CASE WHEN mnt_rev.startDate > rep_rev.firstCap THEN mnt_rev.startDate ELSE rep_rev.firstCap END),
+              endDate: toString(CASE WHEN mnt_rev.endDate < rep_rev.lastCap THEN mnt_rev.endDate ELSE rep_rev.lastCap END),
+              person1Role: 'manager', // p1 is manager
+              person2Role: 'player' // p2 is player
+            } ELSE null END) AS rawManagerPlayerNationalConnections
+      WITH p1, p2, startPersonId, endPersonId, clubTeammateConnections, nationalTeammateConnections, playerManagerClubConnections, playerManagerNationalConnections, managerPlayerClubConnections,
+           [conn IN rawManagerPlayerNationalConnections WHERE conn IS NOT NULL] AS managerPlayerNationalConnections
 
       // 5. Co-managers at Club (MANAGED)
       OPTIONAL MATCH (p1)-[m1:MANAGED]->(c_mm:Club)<-[m2:MANAGED]-(p2)
       WHERE m1.startDate <= m2.endDate AND m2.startDate <= m1.endDate
+      WITH p1, p2, $startPersonId AS startPersonId, $endPersonId AS endPersonId, clubTeammateConnections, nationalTeammateConnections, playerManagerClubConnections, playerManagerNationalConnections, managerPlayerClubConnections, managerPlayerNationalConnections, m1, m2, c_mm
       WITH p1, p2, startPersonId, endPersonId, clubTeammateConnections, nationalTeammateConnections, playerManagerClubConnections, playerManagerNationalConnections, managerPlayerClubConnections, managerPlayerNationalConnections,
-        collect({
-          type: 'co_managers_club',
-          venueName: c_mm.name,
-          venueType: 'Club',
-          startDate: toString(CASE WHEN m1.startDate > m2.startDate THEN m1.startDate ELSE m2.startDate END),
-          endDate: toString(CASE WHEN m1.endDate < m2.endDate THEN m1.endDate ELSE m2.endDate END)
-        }) AS coManagerClubConnections
+           collect(CASE WHEN c_mm IS NOT NULL THEN {
+              type: 'co_managers_club',
+              venueName: c_mm.name,
+              venueType: 'Club',
+              startDate: toString(CASE WHEN m1.startDate > m2.startDate THEN m1.startDate ELSE m2.startDate END),
+              endDate: toString(CASE WHEN m1.endDate < m2.endDate THEN m1.endDate ELSE m2.endDate END)
+            } ELSE null END) AS rawCoManagerClubConnections
+      WITH p1, p2, startPersonId, endPersonId, clubTeammateConnections, nationalTeammateConnections, playerManagerClubConnections, playerManagerNationalConnections, managerPlayerClubConnections, managerPlayerNationalConnections,
+           [conn IN rawCoManagerClubConnections WHERE conn IS NOT NULL] AS coManagerClubConnections
 
       // 6. Co-managers at National Team (MANAGED_NT)
       OPTIONAL MATCH (p1)-[n1:MANAGED_NT]->(nt_mm:NationalTeam)<-[n2:MANAGED_NT]-(p2)
       WHERE n1.startDate <= n2.endDate AND n2.startDate <= n1.endDate
+      WITH p1, p2, $startPersonId AS startPersonId, $endPersonId AS endPersonId, clubTeammateConnections, nationalTeammateConnections, playerManagerClubConnections, playerManagerNationalConnections, managerPlayerClubConnections, managerPlayerNationalConnections, coManagerClubConnections, n1, n2, nt_mm
       WITH p1, p2, startPersonId, endPersonId, clubTeammateConnections, nationalTeammateConnections, playerManagerClubConnections, playerManagerNationalConnections, managerPlayerClubConnections, managerPlayerNationalConnections, coManagerClubConnections,
-        collect({
-          type: 'co_managers_national',
-          venueName: nt_mm.name,
-          venueType: 'NationalTeam',
-          startDate: toString(CASE WHEN n1.startDate > n2.startDate THEN n1.startDate ELSE n2.startDate END),
-          endDate: toString(CASE WHEN n1.endDate < n2.endDate THEN n1.endDate ELSE n2.endDate END)
-        }) AS coManagerNationalConnections
+           collect(CASE WHEN nt_mm IS NOT NULL THEN {
+              type: 'co_managers_national',
+              venueName: nt_mm.name,
+              venueType: 'NationalTeam',
+              startDate: toString(CASE WHEN n1.startDate > n2.startDate THEN n1.startDate ELSE n2.startDate END),
+              endDate: toString(CASE WHEN n1.endDate < n2.endDate THEN n1.endDate ELSE n2.endDate END)
+            } ELSE null END) AS rawCoManagerNationalConnections
+      WITH p1, p2, startPersonId, endPersonId, clubTeammateConnections, nationalTeammateConnections, playerManagerClubConnections, playerManagerNationalConnections, managerPlayerClubConnections, managerPlayerNationalConnections, coManagerClubConnections,
+           [conn IN rawCoManagerNationalConnections WHERE conn IS NOT NULL] AS coManagerNationalConnections
       
       // Combine all connection types and filter out empty lists
       WITH clubTeammateConnections + nationalTeammateConnections + playerManagerClubConnections + playerManagerNationalConnections + managerPlayerClubConnections + managerPlayerNationalConnections + coManagerClubConnections + coManagerNationalConnections AS allConnections
@@ -353,20 +380,25 @@ async function findConnectionPath(startPersonId: number, endPersonId: number) {
       }
 
       // Determine connection type and roles
-      if (rel1.type === 'PLAYED_FOR' && rel2.type === 'PLAYED_FOR' && venueType === 'Club') {
+      if (rel1.type === 'PLAYED_FOR' && rel2.type === 'PLAYED_FOR' && venueType === 'Club' &&
+          fromPersonNode.primaryPosition !== 'Manager' && toPersonNode.primaryPosition !== 'Manager') {
         connectionType = 'club_teammates';
       } else if (rel1.type === 'REPRESENTED' && rel2.type === 'REPRESENTED' && venueType === 'NationalTeam') {
         connectionType = 'national_teammates';
-      } else if (rel1.type === 'MANAGED' && rel2.type === 'MANAGED' && venueType === 'Club') {
+      } else if (rel1.type === 'MANAGED' && rel2.type === 'MANAGED' && venueType === 'Club' &&
+                 fromPersonNode.primaryPosition === 'Manager' && toPersonNode.primaryPosition === 'Manager') {
         connectionType = 'co_managers_club';
-      } else if (rel1.type === 'MANAGED_NT' && rel2.type === 'MANAGED_NT' && venueType === 'NationalTeam') {
+      } else if (rel1.type === 'MANAGED_NT' && rel2.type === 'MANAGED_NT' && venueType === 'NationalTeam' &&
+                 fromPersonNode.primaryPosition === 'Manager' && toPersonNode.primaryPosition === 'Manager') {
         connectionType = 'co_managers_national';
       } else if (venueType === 'Club') {
-        if (rel1.type === 'PLAYED_FOR' && rel2.type === 'MANAGED') {
+        if (rel1.type === 'PLAYED_FOR' && rel2.type === 'MANAGED' &&
+            fromPersonNode.primaryPosition !== 'Manager' && toPersonNode.primaryPosition === 'Manager') {
           connectionType = 'player_manager_club';
           person1Role = 'player'; // fromPerson is player
           person2Role = 'manager'; // toPerson is manager
-        } else if (rel1.type === 'MANAGED' && rel2.type === 'PLAYED_FOR') {
+        } else if (rel1.type === 'MANAGED' && rel2.type === 'PLAYED_FOR' &&
+                   fromPersonNode.primaryPosition === 'Manager' && toPersonNode.primaryPosition !== 'Manager') {
           connectionType = 'player_manager_club';
           person1Role = 'manager'; // fromPerson is manager
           person2Role = 'player'; // toPerson is player
