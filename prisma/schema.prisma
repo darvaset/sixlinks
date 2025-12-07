@@ -27,7 +27,7 @@ model Person {
   // ---------------------------------------------------------------------------
   // Basic Info
   // ---------------------------------------------------------------------------
-  name                String    // Display name: "Messi", "Pep Guardiola"
+  name                String    @unique // Display name: "Messi", "Pep Guardiola"
   fullName            String?   @map("full_name") // "Lionel Andrés Messi Cuccittini"
   nationality         String    // Primary nationality (country name)
   birthDate           DateTime? @map("birth_date")
@@ -246,6 +246,7 @@ model ClubPlayerStint {
   @@index([personId])
   @@index([clubId])
   @@index([startDate, endDate])
+  @@unique([personId, clubId, startDate])
   @@map("club_player_stints")
 }
 
@@ -287,6 +288,7 @@ model ClubManagerStint {
   @@index([personId])
   @@index([clubId])
   @@index([startDate, endDate])
+  @@unique([personId, clubId, startDate])
   @@map("club_manager_stints")
 }
 
@@ -370,6 +372,7 @@ model NationalTeamManagerStint {
   @@index([personId])
   @@index([nationalTeamId])
   @@index([startDate, endDate])
+  @@unique([personId, nationalTeamId, startDate])
   @@map("national_team_manager_stints")
 }
 
