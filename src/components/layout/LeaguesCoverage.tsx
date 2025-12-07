@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+
 
 interface League {
   name: string;
@@ -44,9 +44,7 @@ export function LeaguesCoverage() {
   return (
     <div className="mb-8">
       {/* Summary Bar */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
+      <div
         className="bg-white/10 backdrop-blur-sm rounded-lg p-4 mb-4"
       >
         <div className="text-center mb-2">
@@ -60,17 +58,14 @@ export function LeaguesCoverage() {
         
         {/* Quick League Summary */}
         <div className="flex flex-wrap justify-center gap-2 mb-3">
-          {topLeagues.map((league, index) => (
-            <motion.span
+          {topLeagues.map((league, _index) => (
+            <span
               key={league.name}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: index * 0.05 }}
               className="inline-flex items-center gap-1 bg-white/20 text-white px-3 py-1 rounded-full text-sm"
             >
               <span className="font-medium">{league.name}</span>
               <span className="text-gray-300">({league.playerCount})</span>
-            </motion.span>
+            </span>
           ))}
           {totalLeagues > 5 && (
             <span className="inline-flex items-center text-gray-300 text-sm">
@@ -85,14 +80,11 @@ export function LeaguesCoverage() {
         >
           {showDetails ? 'Hide Details ↑' : 'View All Leagues ↓'}
         </button>
-      </motion.div>
+      </div>
 
       {/* Detailed View */}
       {showDetails && (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={{ opacity: 0, height: 0 }}
+        <div
           className="bg-white rounded-lg shadow-lg p-6 space-y-6"
         >
           {/* Club Leagues */}
@@ -146,7 +138,7 @@ export function LeaguesCoverage() {
               </div>
             </div>
           </div>
-        </motion.div>
+        </div>
       )}
     </div>
   );

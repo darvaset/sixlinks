@@ -1,7 +1,5 @@
 'use client'
 
-import { motion } from 'framer-motion';
-
 export interface Stats {
   players: number;
   teams: number;
@@ -36,12 +34,9 @@ export function StatsBar({ stats }: StatsBarProps) {
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-      {statItems.map((stat, index) => (
-        <motion.div
+      {statItems.map((stat, _index) => (
+        <div
           key={stat.label}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: index * 0.1 }}
           className="relative overflow-hidden rounded-lg shadow-sm"
         >
           <div className={`absolute inset-0 bg-gradient-to-br ${stat.color} opacity-10`}></div>
@@ -54,7 +49,7 @@ export function StatsBar({ stats }: StatsBarProps) {
               {typeof stat.value === 'number' ? stat.value.toLocaleString() : stat.value}
             </p>
           </div>
-        </motion.div>
+        </div>
       ))}
     </div>
   );

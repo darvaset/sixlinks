@@ -1,36 +1,33 @@
-export interface Player {
+export interface Person {
   id: number;
   name: string;
   fullName?: string;
   nationality?: string;
-  position?: string;
-  currentTeam?: {
-    name: string;
-    country?: string;
-    league?: string;
-  };
+  primaryPosition?: string;
+  photoUrl?: string;
+  isRetired?: boolean;
 }
 
 export interface PathStep {
   from: {
     id: number;
     name: string;
-    type: 'player' | 'manager';
+    type: 'person';
     nationality?: string;
-    position?: string;
+    position?: string; // Using 'position' for primaryPosition from Person
   };
   to: {
     id: number;
     name: string;
-    type: 'player' | 'manager';
+    type: 'person';
     nationality?: string;
-    position?: string;
+    position?: string; // Using 'position' for primaryPosition from Person
   };
   connection: {
-    type: 'teammate' | 'manager' | 'national_team';
+    type: 'club_teammates' | 'national_teammates' | 'player_manager_club' | 'player_manager_national' | 'co_managers_club' | 'co_managers_national';
     description: string;
-    team?: string;
-    period?: string; // Can be "current", date range like "2017-2019", or descriptive like "from 2015 to 2018"
+    venue?: string; // Club or NationalTeam name
+    period?: string;
   };
 }
 
@@ -40,6 +37,7 @@ export interface GameResult {
   totalSteps: number;
   searchTime: number;
   score: number;
-  startPlayer: Player;
-  endPlayer: Player;
+  startPerson: Person;
+  endPerson: Person;
+  message?: string;
 }

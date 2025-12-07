@@ -1,11 +1,13 @@
 {
   "dependencies": {
     "@prisma/client": "^6.10.1",
+    "@supabase/supabase-js": "^2.86.2",
+    "@typescript-eslint/eslint-plugin": "^8.48.1",
+    "@typescript-eslint/parser": "^8.48.1",
     "axios": "^1.10.0",
     "cheerio": "^1.1.0",
     "cron": "^4.3.1",
     "dotenv": "^16.5.0",
-    "framer-motion": "^12.19.1",
     "neo4j-driver": "^5.28.1",
     "next": "^15.3.4",
     "react": "^19.1.0",

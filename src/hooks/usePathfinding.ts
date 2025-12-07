@@ -14,7 +14,7 @@ export function usePathfinding() {
     setResult(null);
 
     try {
-      const response = await fetch('/api/find-path', {
+      const response = await fetch('/api/pathfinding', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ startPlayerId: startId, endPlayerId: endId }),

@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { GameResult } from '@/types/game';
 import { Scoreboard } from './Scoreboard';
 import { CarouselStep } from './CarouselStep';
@@ -15,11 +14,11 @@ export function ConnectionResult({ result, onPlayAgain }: ConnectionResultProps)
   const [currentIndex, setCurrentIndex] = useState(0);
 
   // FIX: For direct connections, we need to handle the display differently
-  const isDirectConnection = result.path.length === 1;
+  // const isDirectConnection = result.path.length === 1;
   
   // For direct connections, we only have one slide
   // For multi-step connections, we show each step
-  const slides = result.path.map((step, index) => ({
+  const slides = result.path.map((step) => ({
     player1: step.from,
     player2: step.to,
     connection: step.connection
@@ -47,24 +46,9 @@ export function ConnectionResult({ result, onPlayAgain }: ConnectionResultProps)
       
       {/* Carousel Container */}
       <div className="relative h-96 overflow-hidden">
-        <AnimatePresence initial={false}>
-          <motion.div
+          <div
             key={currentIndex}
             className="absolute w-full h-full"
-            initial={{ x: 300, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: -300, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            drag="x"
-            dragConstraints={{ left: 0, right: 0 }}
-            onDragEnd={(e, { offset, velocity }) => {
-              const swipe = Math.abs(offset.x) * velocity.x;
-              if (swipe < -10000 && currentIndex < totalSteps - 1) {
-                navigate(1); // Next
-              } else if (swipe > 10000 && currentIndex > 0) {
-                navigate(-1); // Previous
-              }
-            }}
           >
             <CarouselStep
               stepNumber={currentIndex + 1}
@@ -73,8 +57,7 @@ export function ConnectionResult({ result, onPlayAgain }: ConnectionResultProps)
               player2={slides[currentIndex].player2}
               connection={slides[currentIndex].connection}
             />
-          </motion.div>
-        </AnimatePresence>
+          </div>
       </div>
 
       {/* Navigation Controls - Only show if more than 1 step */}

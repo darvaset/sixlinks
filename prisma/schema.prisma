@@ -1,5 +1,12 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// FootyLinks Database Schema v3
+// Last Updated: 2025-12-06
+// 
+// Design Principles:
+// - Person unifies Player/Manager (Guardiola = 1 record)
+// - All dates use DateTime + accuracy field for flexible precision
+// - Soft delete enabled for data recovery
+// - Audit trail for multi-source data management
+// - External IDs for deduplication across data sources
 
 generator client {
   provider = "prisma-client-js"
@@ -7,126 +14,564 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = "postgresql://postgres:UPtoYJN63mVyYE5D@db.ljpvplosgcrrkwurwufg.supabase.co:5432/postgres?schema=public"
+  url      = env("DATABASE_URL")
 }
 
-model Player {
-  id          Int      @id @default(autoincrement())
-  name        String
-  fullName    String?  @map("full_name")
-  nationality String?
-  position    String?
-  birthDate   DateTime? @map("birth_date")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+// ============================================================================
+// CORE ENTITIES
+// ============================================================================
 
+model Person {
+  id                  Int       @id @default(autoincrement())
+  
+  // ---------------------------------------------------------------------------
+  // Basic Info
+  // ---------------------------------------------------------------------------
+  name                String    // Display name: "Messi", "Pep Guardiola"
+  fullName            String?   @map("full_name") // "Lionel Andrés Messi Cuccittini"
+  nationality         String    // Primary nationality (country name)
+  birthDate           DateTime? @map("birth_date")
+  birthDateAccuracy   String    @default("year") @map("birth_date_accuracy") // "day", "month", "year"
+  birthPlace          String?   @map("birth_place") // "Rosario, Argentina"
+  
+  // ---------------------------------------------------------------------------
+  // Career Info
+  // ---------------------------------------------------------------------------
+  primaryPosition     String?   @map("primary_position") // "Forward", "Midfielder", null for managers-only
+  isRetired           Boolean   @default(false) @map("is_retired")
+  retiredDate         DateTime? @map("retired_date")
+  
+  // ---------------------------------------------------------------------------
+  // Media
+  // ---------------------------------------------------------------------------
+  photoUrl            String?   @map("photo_url")
+  
+  // ---------------------------------------------------------------------------
+  // External IDs (for data source deduplication)
+  // ---------------------------------------------------------------------------
+  extTransfermarkt    String?   @unique @map("ext_transfermarkt")
+  extFbref            String?   @unique @map("ext_fbref")
+  extSofascore        String?   @unique @map("ext_sofascore")
+  extWikidata         String?   @unique @map("ext_wikidata") // Q-number
+  
+  // ---------------------------------------------------------------------------
+  // Soft Delete & Audit
+  // ---------------------------------------------------------------------------
+  deletedAt           DateTime? @map("deleted_at")
+  lastModifiedBy      String?   @map("last_modified_by") // "manual", "transfermarkt_sync", "admin:diego"
+  
+  // ---------------------------------------------------------------------------
+  // Metadata
+  // ---------------------------------------------------------------------------
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  
+  // ---------------------------------------------------------------------------
   // Relationships
-  playerTeams    PlayerTeam[]
-  playerManagers PlayerManager[]
-
-  @@map("players")
+  // ---------------------------------------------------------------------------
+  clubPlayerStints        ClubPlayerStint[]
+  clubManagerStints       ClubManagerStint[]
+  nationalTeamPlayerStints NationalTeamPlayerStint[]
+  nationalTeamManagerStints NationalTeamManagerStint[]
+  transfers               Transfer[] @relation("TransferPlayer")
+  
+  @@index([name])
+  @@index([nationality])
+  @@index([primaryPosition])
+  @@index([deletedAt])
+  @@map("persons")
 }
 
-model Team {
-  id          Int      @id @default(autoincrement())
-  name        String
-  country     String?
-  league      String?
-  foundedYear Int?     @map("founded_year")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
+model Club {
+  id                  Int       @id @default(autoincrement())
+  
+  // ---------------------------------------------------------------------------
+  // Basic Info
+  // ---------------------------------------------------------------------------
+  name                String    // Current official name: "Manchester United"
+  shortName           String?   @map("short_name") // "Man Utd"
+  country             String    // Country name
+  city                String?
+  
+  // ---------------------------------------------------------------------------
+  // League Info (current status)
+  // ---------------------------------------------------------------------------
+  currentLeague       String?   @map("current_league") // "Premier League"
+  
+  // ---------------------------------------------------------------------------
+  // Historical Info
+  // ---------------------------------------------------------------------------
+  foundedYear         Int?      @map("founded_year")
+  previousNames       String[]  @default([]) @map("previous_names") // ["Newton Heath LYR FC"]
+  previousClubId      Int?      @map("previous_club_id") // For club transformations (Wimbledon -> MK Dons)
+  
+  // ---------------------------------------------------------------------------
+  // Media & Branding
+  // ---------------------------------------------------------------------------
+  logoUrl             String?   @map("logo_url")
+  primaryColor        String?   @map("primary_color") // "#DA291C"
+  secondaryColor      String?   @map("secondary_color")
+  
+  // ---------------------------------------------------------------------------
+  // External IDs
+  // ---------------------------------------------------------------------------
+  extTransfermarkt    String?   @unique @map("ext_transfermarkt")
+  extFbref            String?   @unique @map("ext_fbref")
+  extSofascore        String?   @unique @map("ext_sofascore")
+  extWikidata         String?   @unique @map("ext_wikidata")
+  
+  // ---------------------------------------------------------------------------
+  // Soft Delete & Audit
+  // ---------------------------------------------------------------------------
+  deletedAt           DateTime? @map("deleted_at")
+  lastModifiedBy      String?   @map("last_modified_by")
+  
+  // ---------------------------------------------------------------------------
+  // Metadata
+  // ---------------------------------------------------------------------------
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  
+  // ---------------------------------------------------------------------------
   // Relationships
-  playerTeams  PlayerTeam[]
-  managerTeams ManagerTeam[]
-
-  @@map("teams")
+  // ---------------------------------------------------------------------------
+  playerStints        ClubPlayerStint[]
+  managerStints       ClubManagerStint[]
+  transfersTo         Transfer[] @relation("TransferToClub")
+  transfersFrom       Transfer[] @relation("TransferFromClub")
+  loansFrom           ClubPlayerStint[] @relation("LoanFromClub")
+  previousClub        Club?     @relation("ClubEvolution", fields: [previousClubId], references: [id])
+  successorClubs      Club[]    @relation("ClubEvolution")
+  
+  @@unique([name, country])
+  @@index([country])
+  @@index([currentLeague])
+  @@index([deletedAt])
+  @@map("clubs")
 }
 
-model Manager {
-  id          Int      @id @default(autoincrement())
-  name        String
-  nationality String?
-  birthDate   DateTime? @map("birth_date")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
+model NationalTeam {
+  id                  Int       @id @default(autoincrement())
+  
+  // ---------------------------------------------------------------------------
+  // Basic Info
+  // ---------------------------------------------------------------------------
+  name                String    @unique // "Argentina", "England"
+  fifaCode            String?   @unique @map("fifa_code") // "ARG", "ENG"
+  confederation       String?   // "CONMEBOL", "UEFA", "CONCACAF", "CAF", "AFC", "OFC"
+  
+  // ---------------------------------------------------------------------------
+  // Media
+  // ---------------------------------------------------------------------------
+  flagUrl             String?   @map("flag_url")
+  
+  // ---------------------------------------------------------------------------
+  // External IDs
+  // ---------------------------------------------------------------------------
+  extTransfermarkt    String?   @unique @map("ext_transfermarkt")
+  extFbref            String?   @unique @map("ext_fbref")
+  extWikidata         String?   @unique @map("ext_wikidata")
+  
+  // ---------------------------------------------------------------------------
+  // Soft Delete & Audit
+  // ---------------------------------------------------------------------------
+  deletedAt           DateTime? @map("deleted_at")
+  lastModifiedBy      String?   @map("last_modified_by")
+  
+  // ---------------------------------------------------------------------------
+  // Metadata
+  // ---------------------------------------------------------------------------
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  
+  // ---------------------------------------------------------------------------
   // Relationships
-  managerTeams   ManagerTeam[]
-  playerManagers PlayerManager[]
-
-  @@map("managers")
+  // ---------------------------------------------------------------------------
+  playerStints        NationalTeamPlayerStint[]
+  managerStints       NationalTeamManagerStint[]
+  
+  @@map("national_teams")
 }
 
-model PlayerTeam {
-  id        Int       @id @default(autoincrement())
-  playerId  Int       @map("player_id")
-  teamId    Int       @map("team_id")
-  startDate DateTime? @map("start_date")
-  endDate   DateTime? @map("end_date")
-  loan      Boolean   @default(false)
-  createdAt DateTime  @default(now()) @map("created_at")
+// ============================================================================
+// CAREER RELATIONSHIPS
+// ============================================================================
 
-  // Relations
-  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
-
-  @@map("player_teams")
+model ClubPlayerStint {
+  id                  Int       @id @default(autoincrement())
+  
+  personId            Int       @map("person_id")
+  clubId              Int       @map("club_id")
+  
+  // ---------------------------------------------------------------------------
+  // Dates
+  // ---------------------------------------------------------------------------
+  startDate           DateTime  @map("start_date")
+  startDateAccuracy   String    @default("year") @map("start_date_accuracy") // "day", "month", "year"
+  endDate             DateTime? @map("end_date") // null = current
+  endDateAccuracy     String?   @map("end_date_accuracy")
+  
+  // ---------------------------------------------------------------------------
+  // Details
+  // ---------------------------------------------------------------------------
+  position            String?   // Position at this club (may differ from primary)
+  squadNumber         Int?      @map("squad_number")
+  isLoan              Boolean   @default(false) @map("is_loan")
+  loanFromClubId      Int?      @map("loan_from_club_id")
+  
+  // ---------------------------------------------------------------------------
+  // Stats (optional, for display/trivia)
+  // ---------------------------------------------------------------------------
+  appearances         Int?
+  goals               Int?
+  assists             Int?
+  
+  // ---------------------------------------------------------------------------
+  // Audit
+  // ---------------------------------------------------------------------------
+  lastModifiedBy      String?   @map("last_modified_by")
+  
+  // ---------------------------------------------------------------------------
+  // Metadata
+  // ---------------------------------------------------------------------------
+  createdAt           DateTime  @default(now()) @map("created_at")
+  
+  // ---------------------------------------------------------------------------
+  // Relationships
+  // ---------------------------------------------------------------------------
+  person              Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  club                Club      @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  loanFromClub        Club?     @relation("LoanFromClub", fields: [loanFromClubId], references: [id])
+  
+  @@index([personId])
+  @@index([clubId])
+  @@index([startDate, endDate])
+  @@map("club_player_stints")
 }
 
-model ManagerTeam {
-  id        Int       @id @default(autoincrement())
-  managerId Int       @map("manager_id")
-  teamId    Int       @map("team_id")
-  startDate DateTime? @map("start_date")
-  endDate   DateTime? @map("end_date")
-  createdAt DateTime  @default(now()) @map("created_at")
-
-  // Relations
-  manager Manager @relation(fields: [managerId], references: [id], onDelete: Cascade)
-  team    Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
-
-  @@map("manager_teams")
+model ClubManagerStint {
+  id                  Int       @id @default(autoincrement())
+  
+  personId            Int       @map("person_id")
+  clubId              Int       @map("club_id")
+  
+  // ---------------------------------------------------------------------------
+  // Dates
+  // ---------------------------------------------------------------------------
+  startDate           DateTime  @map("start_date")
+  startDateAccuracy   String    @default("year") @map("start_date_accuracy")
+  endDate             DateTime? @map("end_date")
+  endDateAccuracy     String?   @map("end_date_accuracy")
+  
+  // ---------------------------------------------------------------------------
+  // Details
+  // ---------------------------------------------------------------------------
+  role                String    @default("manager") // "manager", "assistant", "caretaker", "head_coach", "interim"
+  
+  // ---------------------------------------------------------------------------
+  // Audit
+  // ---------------------------------------------------------------------------
+  lastModifiedBy      String?   @map("last_modified_by")
+  
+  // ---------------------------------------------------------------------------
+  // Metadata
+  // ---------------------------------------------------------------------------
+  createdAt           DateTime  @default(now()) @map("created_at")
+  
+  // ---------------------------------------------------------------------------
+  // Relationships
+  // ---------------------------------------------------------------------------
+  person              Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  club                Club      @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  
+  @@index([personId])
+  @@index([clubId])
+  @@index([startDate, endDate])
+  @@map("club_manager_stints")
 }
 
-model PlayerManager {
-  id        Int       @id @default(autoincrement())
-  playerId  Int       @map("player_id")
-  managerId Int       @map("manager_id")
-  teamId    Int?      @map("team_id") // Optional: which team they were together at
-  startDate DateTime? @map("start_date")
-  endDate   DateTime? @map("end_date")
-  createdAt DateTime  @default(now()) @map("created_at")
-
-  // Relations
-  player  Player  @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  manager Manager @relation(fields: [managerId], references: [id], onDelete: Cascade)
-
-  @@map("player_managers")
+model NationalTeamPlayerStint {
+  id                  Int       @id @default(autoincrement())
+  
+  personId            Int       @map("person_id")
+  nationalTeamId      Int       @map("national_team_id")
+  
+  // ---------------------------------------------------------------------------
+  // Career Span (not individual caps)
+  // ---------------------------------------------------------------------------
+  firstCap            DateTime  @map("first_cap")
+  firstCapAccuracy    String    @default("year") @map("first_cap_accuracy")
+  lastCap             DateTime? @map("last_cap") // null = still active internationally
+  lastCapAccuracy     String?   @map("last_cap_accuracy")
+  
+  // ---------------------------------------------------------------------------
+  // Stats
+  // ---------------------------------------------------------------------------
+  totalCaps           Int?      @map("total_caps")
+  goals               Int?
+  
+  // ---------------------------------------------------------------------------
+  // Audit
+  // ---------------------------------------------------------------------------
+  lastModifiedBy      String?   @map("last_modified_by")
+  
+  // ---------------------------------------------------------------------------
+  // Metadata
+  // ---------------------------------------------------------------------------
+  createdAt           DateTime  @default(now()) @map("created_at")
+  
+  // ---------------------------------------------------------------------------
+  // Relationships
+  // ---------------------------------------------------------------------------
+  person              Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  nationalTeam        NationalTeam @relation(fields: [nationalTeamId], references: [id], onDelete: Cascade)
+  
+  @@unique([personId, nationalTeamId])
+  @@index([personId])
+  @@index([nationalTeamId])
+  @@map("national_team_player_stints")
 }
 
-// Game-related tables
-model Game {
-  id          Int      @id @default(autoincrement())
-  startPlayer String   @map("start_player")
-  endPlayer   String   @map("end_player")
-  pathLength  Int      @map("path_length")
-  timeSeconds Int      @map("time_seconds")
-  score       Int
-  userId      String?  @map("user_id") // For registered users
-  sessionId   String?  @map("session_id") // For anonymous users
-  createdAt   DateTime @default(now()) @map("created_at")
-
-  @@map("games")
+model NationalTeamManagerStint {
+  id                  Int       @id @default(autoincrement())
+  
+  personId            Int       @map("person_id")
+  nationalTeamId      Int       @map("national_team_id")
+  
+  // ---------------------------------------------------------------------------
+  // Dates
+  // ---------------------------------------------------------------------------
+  startDate           DateTime  @map("start_date")
+  startDateAccuracy   String    @default("year") @map("start_date_accuracy")
+  endDate             DateTime? @map("end_date")
+  endDateAccuracy     String?   @map("end_date_accuracy")
+  
+  // ---------------------------------------------------------------------------
+  // Details
+  // ---------------------------------------------------------------------------
+  role                String    @default("manager") // "manager", "assistant", "caretaker", "interim"
+  
+  // ---------------------------------------------------------------------------
+  // Audit
+  // ---------------------------------------------------------------------------
+  lastModifiedBy      String?   @map("last_modified_by")
+  
+  // ---------------------------------------------------------------------------
+  // Metadata
+  // ---------------------------------------------------------------------------
+  createdAt           DateTime  @default(now()) @map("created_at")
+  
+  // ---------------------------------------------------------------------------
+  // Relationships
+  // ---------------------------------------------------------------------------
+  person              Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  nationalTeam        NationalTeam @relation(fields: [nationalTeamId], references: [id], onDelete: Cascade)
+  
+  @@index([personId])
+  @@index([nationalTeamId])
+  @@index([startDate, endDate])
+  @@map("national_team_manager_stints")
 }
+
+// ============================================================================
+// TRANSFERS
+// ============================================================================
+
+model Transfer {
+  id                  Int       @id @default(autoincrement())
+  
+  personId            Int       @map("person_id")
+  fromClubId          Int?      @map("from_club_id") // null = youth academy / free agent / unknown
+  toClubId            Int       @map("to_club_id")
+  
+  // ---------------------------------------------------------------------------
+  // Details
+  // ---------------------------------------------------------------------------
+  transferDate        DateTime  @map("transfer_date")
+  transferDateAccuracy String   @default("day") @map("transfer_date_accuracy")
+  transferType        String    @map("transfer_type") // "permanent", "loan", "loan_return", "free", "youth", "retired"
+  
+  // ---------------------------------------------------------------------------
+  // Financial (all optional)
+  // ---------------------------------------------------------------------------
+  feeOriginal         BigInt?   @map("fee_original") // Original amount in cents/smallest unit
+  feeCurrency         String?   @map("fee_currency") // "EUR", "GBP", "USD"
+  feeEuros            BigInt?   @map("fee_euros") // Converted to EUR at time of transfer (cents)
+  isUndisclosed       Boolean   @default(false) @map("is_undisclosed")
+  isFree              Boolean   @default(false) @map("is_free")
+  
+  // ---------------------------------------------------------------------------
+  // Contract
+  // ---------------------------------------------------------------------------
+  contractEndDate     DateTime? @map("contract_end_date")
+  contractYears       Int?      @map("contract_years")
+  
+  // ---------------------------------------------------------------------------
+  // Audit
+  // ---------------------------------------------------------------------------
+  lastModifiedBy      String?   @map("last_modified_by")
+  
+  // ---------------------------------------------------------------------------
+  // Metadata
+  // ---------------------------------------------------------------------------
+  createdAt           DateTime  @default(now()) @map("created_at")
+  
+  // ---------------------------------------------------------------------------
+  // Relationships
+  // ---------------------------------------------------------------------------
+  person              Person    @relation("TransferPlayer", fields: [personId], references: [id], onDelete: Cascade)
+  fromClub            Club?     @relation("TransferFromClub", fields: [fromClubId], references: [id])
+  toClub              Club      @relation("TransferToClub", fields: [toClubId], references: [id])
+  
+  @@index([personId])
+  @@index([fromClubId])
+  @@index([toClubId])
+  @@index([transferDate])
+  @@index([transferType])
+  @@map("transfers")
+}
+
+// ============================================================================
+// DATA PROVENANCE
+// ============================================================================
+
+model DataSource {
+  id                  Int       @id @default(autoincrement())
+  
+  name                String    @unique // "transfermarkt", "fbref", "sofascore", "manual"
+  displayName         String    @map("display_name") // "Transfermarkt"
+  baseUrl             String?   @map("base_url") // "https://www.transfermarkt.com"
+  
+  // ---------------------------------------------------------------------------
+  // Sync Tracking
+  // ---------------------------------------------------------------------------
+  lastSyncAt          DateTime? @map("last_sync_at")
+  lastSyncStatus      String?   @map("last_sync_status") // "success", "partial", "failed"
+  lastSyncMessage     String?   @map("last_sync_message")
+  
+  // ---------------------------------------------------------------------------
+  // Metadata
+  // ---------------------------------------------------------------------------
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  
+  @@map("data_sources")
+}
+
+// ============================================================================
+// GAME ENTITIES
+// ============================================================================
 
 model DailyChallenge {
-  id          Int      @id @default(autoincrement())
-  date        DateTime @unique
-  startPlayer String   @map("start_player")
-  endPlayer   String   @map("end_player")
-  description String?
-  createdAt   DateTime @default(now()) @map("created_at")
-
+  id                  Int       @id @default(autoincrement())
+  
+  date                DateTime  @unique @db.Date
+  startPersonId       Int       @map("start_person_id")
+  endPersonId         Int       @map("end_person_id")
+  
+  // ---------------------------------------------------------------------------
+  // Pre-computed Path
+  // ---------------------------------------------------------------------------
+  optimalPath         Json      @map("optimal_path") // Array of step objects
+  optimalSteps        Int       @map("optimal_steps")
+  
+  // ---------------------------------------------------------------------------
+  // Curation
+  // ---------------------------------------------------------------------------
+  difficulty          String?   // "easy", "medium", "hard"
+  theme               String?   // "El Clasico", "World Cup Winners", "Premier League Legends"
+  curatorNotes        String?   @map("curator_notes") // Internal notes for why this was chosen
+  
+  // ---------------------------------------------------------------------------
+  // Publishing
+  // ---------------------------------------------------------------------------
+  isPublished         Boolean   @default(false) @map("is_published")
+  publishedAt         DateTime? @map("published_at")
+  
+  // ---------------------------------------------------------------------------
+  // Metadata
+  // ---------------------------------------------------------------------------
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  
+  // ---------------------------------------------------------------------------
+  // Relationships
+  // ---------------------------------------------------------------------------
+  sessions            GameSession[]
+  
+  @@index([date])
+  @@index([isPublished])
   @@map("daily_challenges")
 }
+
+model GameSession {
+  id                  String    @id @default(uuid())
+  
+  // ---------------------------------------------------------------------------
+  // Challenge Reference (optional for free play)
+  // ---------------------------------------------------------------------------
+  dailyChallengeId    Int?      @map("daily_challenge_id")
+  startPersonId       Int       @map("start_person_id")
+  endPersonId         Int       @map("end_person_id")
+  
+  // ---------------------------------------------------------------------------
+  // User Identity (nickname for MVP, expandable for auth later)
+  // ---------------------------------------------------------------------------
+  nickname            String?
+  // Future: userId Int? @map("user_id")
+  
+  // ---------------------------------------------------------------------------
+  // Game State
+  // ---------------------------------------------------------------------------
+  status              String    @default("in_progress") // "in_progress", "completed", "abandoned", "expired"
+  pathTaken           Json      @default("[]") @map("path_taken") // Array of choices made
+  currentStep         Int       @default(0) @map("current_step")
+  livesRemaining      Int       @default(3) @map("lives_remaining")
+  hintsUsed           Int       @default(0) @map("hints_used")
+  
+  // ---------------------------------------------------------------------------
+  // Results (populated on completion)
+  // ---------------------------------------------------------------------------
+  totalSteps          Int?      @map("total_steps")
+  isOptimalPath       Boolean?  @map("is_optimal_path")
+  timeSeconds         Int?      @map("time_seconds")
+  score               Int?
+  
+  // ---------------------------------------------------------------------------
+  // Timestamps
+  // ---------------------------------------------------------------------------
+  startedAt           DateTime  @default(now()) @map("started_at")
+  completedAt         DateTime? @map("completed_at")
+  
+  // ---------------------------------------------------------------------------
+  // Relationships
+  // ---------------------------------------------------------------------------
+  dailyChallenge      DailyChallenge? @relation(fields: [dailyChallengeId], references: [id])
+  
+  @@index([dailyChallengeId])
+  @@index([nickname])
+  @@index([score])
+  @@index([status])
+  @@index([startedAt])
+  @@map("game_sessions")
+}
+
+// ============================================================================
+// FUTURE CONSIDERATIONS (documented, not implemented)
+// ============================================================================
+
+// League Standings (v2)
+// ---------------------
+// model LeagueSeason { ... }
+// model LeagueStanding { ... }
+
+// User Accounts (v2)
+// ------------------
+// model User { ... }
+// Add userId to GameSession
+
+// Competitions & Trophies (v3)
+// ----------------------------
+// model Competition { ... }
+// model CompetitionEdition { ... }
+// model Trophy { ... }
