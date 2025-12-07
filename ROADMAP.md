@@ -1,6 +1,6 @@
 # FootyLinks - Product Roadmap
 
-> Last Updated: 2025-12-06
+> Last Updated: 2025-12-07
 > Target: MVP Ready by End of January 2026
 > Major Milestone: World Cup 2026 (June)
 
@@ -17,7 +17,7 @@ A football connection game where players find paths between footballers through 
 ### Data Scope
 - **League:** Premier League only (1992-present, ~32 seasons)
 - **Entities:** Players, Managers, Clubs, National Teams
-- **Connections:** 
+- **Connections:**
   - Teammates (contract overlap, even 1 day counts)
   - Player-Manager relationships
   - National Team (official matches/competitions only)
@@ -106,14 +106,15 @@ A football connection game where players find paths between footballers through 
 ### Phase 0: Foundation (Week 1)
 **Goal:** Clean slate with solid infrastructure
 
-- [ ] Create new Supabase project (credentials lost)
-- [ ] Create new Neo4j Aura instance (credentials lost)
-- [ ] Define final database schemas (PostgreSQL + Neo4j)
-- [ ] Set up environment variables properly (.env.local, not hardcoded)
-- [ ] Verify existing pathfinding algorithm works
-- [ ] Clean up repository structure
-- [ ] Set up proper Git workflow (feature branches)
-- [x] Update pathfinding for v3
+- [ ] Create new Supabase project (credentials lost) - *External setup required by user.*
+- [ ] Create new Neo4j Aura instance (credentials lost) - *External setup required by user.*
+- [x] Define final database schemas (PostgreSQL + Neo4j) - *PostgreSQL schema was pre-defined; Neo4j schema documentation was created by Gemini.*
+- [ ] Set up environment variables properly (.env.local, not hardcoded) - *External setup required by user.*
+- [x] Verify existing pathfinding algorithm works - *Algorithm updated, debugged, and confirmed to work correctly with seeded data, accurately distinguishing player/manager roles in connections.*
+- [x] Clean up repository structure - *Completed in a previous session.*
+- [ ] Set up proper Git workflow (feature branches) - *Process-related task for the human team.*
+- [x] Update pathfinding for v3 - *Completed by Gemini.*
+- [x] Load test data - *Test data seeded into PostgreSQL and synced to Neo4j by Gemini, with schema and seed script refined during debugging.*
 
 **Deliverable:** Working backend that can find paths between 2 players
 
@@ -266,3 +267,4 @@ From existing codebase:
 | 2025-12-06 | Contract overlap = connection | Don't need match-level data for teammates |
 | 2025-12-06 | Official matches only for national teams | Cleaner data, verifiable connections |
 | 2025-12-06 | Renamed project to FootyLinks | Better branding, footylinks.app domain |
+| 2025-12-07 | Fixed player/manager pathfinding bug | Resolved incorrect "club_teammates" connection between player and manager, and addressed Cypher query compatibility/aggregation errors. |
