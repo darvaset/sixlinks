@@ -113,6 +113,7 @@ A football connection game where players find paths between footballers through 
 - [ ] Verify existing pathfinding algorithm works
 - [ ] Clean up repository structure
 - [ ] Set up proper Git workflow (feature branches)
+- [x] Update pathfinding for v3
 
 **Deliverable:** Working backend that can find paths between 2 players
 
