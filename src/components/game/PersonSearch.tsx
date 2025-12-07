@@ -113,7 +113,10 @@ export function PersonSearch({ label, placeholder, selectedPerson, onPersonSelec
             </div>
           )}
           {isOpen && results.length === 0 && query.length >= 2 && !isLoading && (
-            <div className="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-lg mt-1 shadow-lg z-10 p-4 text-center text-gray-800">No persons found for &quot;{query}&quot;</div> {/* Updated text */}
+            <>
+              {/* Updated text */}
+              <div className="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-lg mt-1 shadow-lg z-10 p-4 text-center text-gray-800">No persons found for &quot;{query}&quot;</div>
+            </>
           )}
         </div>
       )}
