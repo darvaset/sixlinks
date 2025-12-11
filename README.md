@@ -20,7 +20,7 @@ npm run dev
 
 ## Documentation
 
-- [ROADMAP.md](./ROADMAP.md) - Product roadmap and architecture
+- [ROADMAP.md](./ROADMAP.md) - Product roadmap and architecture, including data pipeline design
 - [AGENT_LOG.md](./AGENT_LOG.md) - Development log and AI assistant context
 - [docs/](./docs/) - Additional documentation
 

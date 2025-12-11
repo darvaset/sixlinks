@@ -123,7 +123,19 @@ A football connection game where players find paths between footballers through 
 ### Phase 1: Data Pipeline (Week 1-2)
 **Goal:** Premier League data ready for gameplay
 
-- [ ] Design data extraction architecture
+#### Data Extraction Architecture
+*   **Primary Source:** Transfermarkt.com (highly detailed football statistics).
+*   **Methodology:** Web scraping using Python (e.g., libraries like BeautifulSoup for parsing HTML, potentially Scrapy for more complex, scalable scraping).
+*   **Process:**
+    1.  **URL Discovery:** Identify relevant Transfermarkt pages (player profiles, club pages, competition pages).
+    2.  **HTML Fetching:** Download raw HTML content of identified pages.
+    3.  **Data Parsing:** Extract structured data (player names, dates, club affiliations, manager stints, national team appearances) from HTML.
+    4.  **Raw Storage:** Store extracted raw data (e.g., JSON or structured HTML snippets) in `data/raw/transfermarkt/` directory, organized by entity type and potentially date of extraction.
+*   **Frequency:** Initially, ad-hoc execution for full historical data. For ongoing updates, a scheduled process (e.g., daily/weekly) will be implemented to fetch recent changes.
+*   **Error Handling:** Implement basic retry mechanisms for failed requests, log errors (e.g., HTTP 404/500, parsing failures), and store failed URLs for later review.
+*   **Scalability:** For MVP, a single-instance scraper will suffice. Future scaling could involve distributed scraping, proxy rotation, and more sophisticated rate limiting.
+
+- [x] Design data extraction architecture
 - [ ] Build scraping scripts (Transfermarkt primary)
 - [ ] Create data validation layer
 - [ ] Import Premier League players (1992-present)
@@ -268,3 +280,4 @@ From existing codebase:
 | 2025-12-06 | Official matches only for national teams | Cleaner data, verifiable connections |
 | 2025-12-06 | Renamed project to FootyLinks | Better branding, footylinks.app domain |
 | 2025-12-07 | Fixed player/manager pathfinding bug | Resolved incorrect "club_teammates" connection between player and manager, and addressed Cypher query compatibility/aggregation errors. |
+| 2025-12-07 | Designed initial data extraction architecture | Leveraged existing 'scripts/data-extraction/transfermarkt' directory for technology and source decisions. |
